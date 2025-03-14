@@ -1,0 +1,19 @@
+# depslib dependency file v1.0
+1741948838 source:e:\demo\hangmanreal\hangman\main.cpp
+	"Game.h"
+
+1741948838 e:\demo\hangmanreal\hangman\game.h
+	<string>
+
+1741949018 source:e:\demo\hangmanreal\hangman\game.cpp
+	"Game.h"
+	"Constants.h"
+	<iostream>
+	<cstdlib>
+	<ctime>
+	<algorithm>
+
+1741949018 e:\demo\hangmanreal\hangman\constants.h
+	<string>
+	<vector>
+
