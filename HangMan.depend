@@ -2,18 +2,28 @@
 1741948838 source:e:\demo\hangmanreal\hangman\main.cpp
 	"Game.h"
 
-1741948838 e:\demo\hangmanreal\hangman\game.h
+1743169831 e:\demo\hangmanreal\hangman\game.h
 	<string>
 
-1741949018 source:e:\demo\hangmanreal\hangman\game.cpp
+1743603868 source:e:\demo\hangmanreal\hangman\game.cpp
 	"Game.h"
 	"Constants.h"
+	"fileReader.h"
 	<iostream>
 	<cstdlib>
 	<ctime>
 	<algorithm>
 
-1741949018 e:\demo\hangmanreal\hangman\constants.h
+1743603794 e:\demo\hangmanreal\hangman\constants.h
 	<string>
 	<vector>
+
+1743603573 source:e:\demo\hangmanreal\hangman\filereader.cpp
+	"fileReader.h"
+	<fstream>
+	<stdexcept>
+
+1743603573 e:\demo\hangmanreal\hangman\filereader.h
+	<vector>
+	<string>
 

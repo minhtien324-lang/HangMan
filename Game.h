@@ -2,7 +2,7 @@
 #define GAME_H
 
 #include <string>
-
+using namespace std;
 class Game {
 public:
     Game();
@@ -15,8 +15,8 @@ private:
     void UpdateGame();
     bool IsGameOver();
 
-    std::string secretWord;
-    std::string guessedWord;
+    string secretWord;
+    string guessedWord;
     int attemptsLeft;
     bool isRunning;
 };

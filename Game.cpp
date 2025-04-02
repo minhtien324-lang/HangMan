@@ -1,17 +1,32 @@
 #include "Game.h"
 #include "Constants.h"
+#include "fileReader.h"
 #include <iostream>
 #include <cstdlib>
 #include <ctime>
 #include <algorithm>
-
+using namespace std;
 Game::Game() : attemptsLeft(MAX_ATTEMPTS), isRunning(true) {
-    InitializeGame();
+      try {
+        vector<string> words = FileReader::ReadWords(WORDS_FILE_PATH);
+        if (words.empty()) {
+            throw runtime_error("Words file is empty");
+        }
+
+        srand(static_cast<unsigned int>(time(0)));
+        secretWord = words[rand() % words.size()];
+        guessedWord = string(secretWord.length(), '_');
+    } catch (const exception& e) {
+        cerr << "Error: " << e.what() << endl;
+        // back neu ko doc dc file
+        secretWord = "hangman";
+        guessedWord = string(secretWord.length(), '_');
+    }
 }
 void Game::InitializeGame() {
     srand(static_cast<unsigned int>(time(0)));
-    secretWord = WORD_LIST[rand() % (sizeof(WORD_LIST) / sizeof(WORD_LIST[0]))];
-    guessedWord = std::string(secretWord.length(), '_');
+    secretWord = WORDS_FILE_PATH[rand() % (sizeof(WORDS_FILE_PATH) / sizeof(WORDS_FILE_PATH[0]))];
+    guessedWord = string(secretWord.length(), '_');
 }
 void Game::Run() {
     while (isRunning) {
@@ -27,21 +42,21 @@ void Game::Run() {
 
 void Game::RenderGame() {
     system("cls");
-    std::cout << HANGMAN_ART[MAX_ATTEMPTS - attemptsLeft] << std::endl;
+    cout << HANGMAN_ART[MAX_ATTEMPTS - attemptsLeft] << endl;
 
-    std::cout << "Welcome to Hangman!" << std::endl;
-    std::cout << "Attempts left: " << attemptsLeft << std::endl;
-    std::cout << "Word: ";
+    cout << "Welcome to Hangman!" <<endl;
+    cout << "Attempts left: " << attemptsLeft << endl;
+    cout << "Word: ";
     for (char c : guessedWord) {
-        std::cout << c << " ";
+        cout << c << " ";
     }
-    std::cout << std::endl;
+    cout << endl;
 }
 
 void Game::HandleInput() {
     char guess;
-    std::cout << "Enter your guess (a-z): ";
-    std::cin >> guess;
+    cout << "Enter your guess (a-z): ";
+    cin >> guess;
     guess = tolower(guess);
 
     bool correctGuess = false;
@@ -59,9 +74,9 @@ void Game::HandleInput() {
 
 void Game::UpdateGame() {
     if (guessedWord == secretWord) {
-        std::cout << "Congratulations! You guessed the word: " << secretWord << std::endl;
+        cout << "Congratulations! You guessed the word: " << secretWord <<endl;
     } else if (attemptsLeft <= 0) {
-        std::cout << "Game over! The word was: " << secretWord << std::endl;
+        cout << "Game over! The word was: " << secretWord <<endl;
     }
 }
 

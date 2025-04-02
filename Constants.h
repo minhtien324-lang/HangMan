@@ -3,10 +3,13 @@
 
 #include <string>
 #include <vector>
+using namespace std;
 //phien bản vẽ tay
 const int MAX_ATTEMPTS = 6;
-const std::string WORD_LIST[] = {"hangman", "programming", "computer", "algorithm", "developer"};
-const std::vector<std::string> HANGMAN_ART = {
+const string WORDS_FILE_PATH = "words.txt";
+//const int MAX_ATTEMPTS = 6;
+//const string WORD_LIST[] = {"hangman", "programming", "computer", "algorithm", "developer"};
+const vector<string> HANGMAN_ART = {
     "  +---+\n"
     "  |   |\n"
     "      |\n"
