@@ -1,12 +1,13 @@
-#ifndef FILEREADER_H
-#define FILEREADER_H
+#ifndef FILE_READER_H
+#define FILE_READER_H
 
 #include <vector>
 #include <string>
-using namespace std;
+
 class FileReader {
 public:
-    static vector<string> ReadWords(const string& filePath);
+    static std::vector<std::string> ReadLines(const std::string& filePath);
+    static std::vector<std::string> ReadWords(const std::string& filePath);
 };
 
 #endif

@@ -1,24 +1,32 @@
 #ifndef GAME_H
 #define GAME_H
 
+#include <SDL.h>
+#include <vector>
 #include <string>
-using namespace std;
+#include <algorithm>
+#include "fileReader.h"
+#include <SDL_ttf.h>
 class Game {
 public:
     Game();
-    void Run();
-
+    ~Game();
+    void run();
+    TTF_Font* font;
 private:
-    void InitializeGame();
-    void RenderGame();
-    void HandleInput();
-    void UpdateGame();
-    bool IsGameOver();
-
-    string secretWord;
-    string guessedWord;
-    int attemptsLeft;
+    const int MAX_ATTEMPTS = 6;
+    SDL_Window* window;
+    SDL_Renderer* renderer;
+    std::vector<SDL_Texture*> hangmanImages;
+    std::string secretWord;
+    std::string guessedWord;
+    std::vector<char> guessedLetters;
+    int wrongGuesses;
     bool isRunning;
+    void loadImages();
+    void processInput(char guess);
+    void renderGame();
+    bool isGameOver();
 };
 
 #endif

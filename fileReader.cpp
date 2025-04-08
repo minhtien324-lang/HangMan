@@ -1,20 +1,27 @@
-#include "fileReader.h"
+#include "FileReader.h"
 #include <fstream>
+#include <sstream>
 #include <stdexcept>
-using namespace std;
-vector<string> FileReader::ReadWords(const string& filePath) {
-    vector<string> words;
-    ifstream file(filePath);
 
+std::vector<std::string> FileReader::ReadWords(const std::string& filePath) {
+    std::ifstream file(filePath);
     if (!file.is_open()) {
-        throw runtime_error("Could not open file: " + filePath);
+        throw std::runtime_error("Khong the mo file: " + filePath);
     }
 
-    string word;
-    while (getline(file, word)) {
-        if (!word.empty()) {
+    std::vector<std::string> words;
+    std::string line;
+
+    while (std::getline(file, line)) {
+        std::stringstream ss(line);
+        std::string word;
+        while (ss >> word) {
             words.push_back(word);
         }
+    }
+
+    if (words.empty()) {
+        throw std::runtime_error("File rong hoac khong hop le");
     }
 
     return words;

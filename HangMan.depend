@@ -1,29 +1,61 @@
 # depslib dependency file v1.0
-1741948838 source:e:\demo\hangmanreal\hangman\main.cpp
+1744035981 source:e:\demo\hangmanreal\hangman\main.cpp
 	"Game.h"
 
-1743169831 e:\demo\hangmanreal\hangman\game.h
+1744125497 e:\demo\hangmanreal\hangman\game.h
+	<SDL.h>
+	<vector>
 	<string>
-
-1743603868 source:e:\demo\hangmanreal\hangman\game.cpp
-	"Game.h"
-	"Constants.h"
+	<algorithm>
 	"fileReader.h"
+	<SDL_ttf.h>
+
+1744126074 source:e:\demo\hangmanreal\hangman\game.cpp
+	"Game.h"
+	"textureManager.h"
+	<SDL_ttf.h>
 	<iostream>
+	<fstream>
 	<cstdlib>
 	<ctime>
 	<algorithm>
+	<sstream>
 
-1743603794 e:\demo\hangmanreal\hangman\constants.h
+1744036457 e:\demo\hangmanreal\hangman\constants.h
+	<SDL.h>
 	<string>
-	<vector>
 
-1743603573 source:e:\demo\hangmanreal\hangman\filereader.cpp
-	"fileReader.h"
+1744126050 source:e:\demo\hangmanreal\hangman\filereader.cpp
+	"FileReader.h"
 	<fstream>
+	<sstream>
 	<stdexcept>
 
-1743603573 e:\demo\hangmanreal\hangman\filereader.h
+1744125951 e:\demo\hangmanreal\hangman\filereader.h
 	<vector>
+	<string>
+
+1744036457 source:e:\demo\hangmanreal\hangman\render.cpp
+	"render.h"
+	"Constants.h"
+	<iostream>
+
+1744035981 e:\demo\hangmanreal\hangman\render.h
+	<SDL.h>
+	<SDL_image.h>
+	<vector>
+
+1744036457 source:e:\demo\hangmanreal\hangman\constants.cpp
+	"Constants.h"
+	<SDL_image.h>
+	<iostream>
+
+1744102134 source:e:\demo\hangmanreal\hangman\texturemanager.cpp
+	"textureManager.h"
+	<SDL_image.h>
+	<iostream>
+
+1744098126 e:\demo\hangmanreal\hangman\texturemanager.h
+	<SDL.h>
 	<string>
 

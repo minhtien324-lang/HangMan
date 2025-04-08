@@ -32,10 +32,13 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 		</Compiler>
-		<Unit filename="Constants.h" />
 		<Unit filename="Game.cpp" />
 		<Unit filename="Game.h" />
+		<Unit filename="fileReader.cpp" />
+		<Unit filename="fileReader.h" />
 		<Unit filename="main.cpp" />
+		<Unit filename="textureManager.cpp" />
+		<Unit filename="textureManager.h" />
 		<Extensions>
 			<lib_finder disable_auto="1" />
 		</Extensions>
