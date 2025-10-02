@@ -1,8 +1,8 @@
 # depslib dependency file v1.0
-1744035981 source:e:\demo\hangmanreal\hangman\main.cpp
+1759399146 source:e:\demo\hangmanreal\hangman\main.cpp
 	"Game.h"
 
-1744125497 e:\demo\hangmanreal\hangman\game.h
+1759400308 e:\demo\hangmanreal\hangman\game.h
 	<SDL.h>
 	<vector>
 	<string>
@@ -10,7 +10,7 @@
 	"fileReader.h"
 	<SDL_ttf.h>
 
-1744126074 source:e:\demo\hangmanreal\hangman\game.cpp
+1759400126 source:e:\demo\hangmanreal\hangman\game.cpp
 	"Game.h"
 	"textureManager.h"
 	<SDL_ttf.h>
@@ -19,19 +19,20 @@
 	<cstdlib>
 	<ctime>
 	<algorithm>
+	<cctype>
 	<sstream>
 
 1744036457 e:\demo\hangmanreal\hangman\constants.h
 	<SDL.h>
 	<string>
 
-1744126050 source:e:\demo\hangmanreal\hangman\filereader.cpp
-	"FileReader.h"
+1759399146 source:e:\demo\hangmanreal\hangman\filereader.cpp
+	"fileReader.h"
 	<fstream>
 	<sstream>
 	<stdexcept>
 
-1744125951 e:\demo\hangmanreal\hangman\filereader.h
+1759399146 e:\demo\hangmanreal\hangman\filereader.h
 	<vector>
 	<string>
 
@@ -50,12 +51,12 @@
 	<SDL_image.h>
 	<iostream>
 
-1744102134 source:e:\demo\hangmanreal\hangman\texturemanager.cpp
+1759399146 source:e:\demo\hangmanreal\hangman\texturemanager.cpp
 	"textureManager.h"
 	<SDL_image.h>
 	<iostream>
 
-1744098126 e:\demo\hangmanreal\hangman\texturemanager.h
+1759399146 e:\demo\hangmanreal\hangman\texturemanager.h
 	<SDL.h>
 	<string>
 
