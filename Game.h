@@ -6,6 +6,7 @@
 #include <string>
 #include <algorithm>
 #include "fileReader.h"
+#include "themeManager.h"
 #include <SDL_ttf.h>
 class Game {
 public:
@@ -14,7 +15,7 @@ public:
     void run();
     TTF_Font* font;
 private:
-    enum GameState { STATE_MENU, STATE_PLAYING, STATE_CONFIRM_EXIT };
+    enum GameState { STATE_THEME_SELECT, STATE_DIFFICULTY_SELECT, STATE_PLAYING, STATE_CONFIRM_EXIT };
     enum Difficulty { DIFF_EASY, DIFF_MEDIUM, DIFF_HARD };
     const int MAX_ATTEMPTS = 6;
     SDL_Window* window;
@@ -27,13 +28,17 @@ private:
     bool isRunning;
     GameState state;
     Difficulty difficulty;
+    ThemeManager::Theme selectedTheme;
     int maxAttempts;
-    int menuIndex; // 0: Easy, 1: Medium, 2: Hard, 3: Quit
+    int themeMenuIndex; // 0-4: Themes, 5: Quit
+    int difficultyMenuIndex; // 0: Easy, 1: Medium, 2: Hard, 3: Back
+    ThemeManager themeManager;
     void loadImages();
     void processInput(char guess);
     void renderGame();
     bool isGameOver();
-    void renderMenu();
+    void renderThemeMenu();
+    void renderDifficultyMenu();
     void renderConfirmExit();
     void renderResult();
     void startNewGame();
