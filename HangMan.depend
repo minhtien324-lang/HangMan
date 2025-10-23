@@ -2,12 +2,13 @@
 1759399146 source:e:\demo\hangmanreal\hangman\main.cpp
 	"Game.h"
 
-1759400308 e:\demo\hangmanreal\hangman\game.h
+1761211563 e:\demo\hangmanreal\hangman\game.h
 	<SDL.h>
 	<vector>
 	<string>
 	<algorithm>
 	"fileReader.h"
+	"themeManager.h"
 	<SDL_ttf.h>
 
 1759400126 source:e:\demo\hangmanreal\hangman\game.cpp
@@ -59,4 +60,9 @@
 1759399146 e:\demo\hangmanreal\hangman\texturemanager.h
 	<SDL.h>
 	<string>
+
+1761211563 e:\demo\hangmanreal\hangman\thememanager.h
+	<vector>
+	<string>
+	<map>
 
