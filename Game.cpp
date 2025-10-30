@@ -16,13 +16,14 @@ Game::Game() : window(nullptr), renderer(nullptr), wrongGuesses(0), isRunning(tr
         std::cerr << "SDL_ttf could not initialize! Error: " << TTF_GetError() << std::endl;
         exit(1);
     }
-    font = TTF_OpenFont("roboto.ttf", 12);
+    font = TTF_OpenFont("roboto.ttf", 20);
+    fontSmall = TTF_OpenFont("roboto.ttf", 36); // tạo thêm biến này cho menu ngoài
     if (!font) {
         std::cerr << "Failed to load font! Error: " << TTF_GetError() << std::endl;
         exit(1);
     }
 
-    // Initial state: show theme selection
+    //
     state = STATE_THEME_SELECT;
     difficulty = DIFF_EASY;
     selectedTheme = ThemeManager::THEME_ANIMALS;
@@ -30,12 +31,13 @@ Game::Game() : window(nullptr), renderer(nullptr), wrongGuesses(0), isRunning(tr
     themeMenuIndex = 0;
     difficultyMenuIndex = 0;
 
-    // We will start game after user picks difficulty
+
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    loadImages();
+    loadTextures();
 }
 
-void Game::loadImages() {
+void Game::loadTextures() {
+    backgroundTexture = TextureManager::LoadTexture("background.png", renderer);
     for(int i = 0; i < 7; i++) {
         std::string path = "hangman_" + std::to_string(i) + ".png";
         SDL_Texture* texture = TextureManager::LoadTexture(path, renderer);
@@ -43,81 +45,119 @@ void Game::loadImages() {
     }
 }
 
+void Game::renderButton(const char* text, int x, int y, bool selected, int w, int h) {
+    SDL_Color textColor = { 255, 255, 255, 255 };
+    SDL_Surface* surface = TTF_RenderText_Solid(font, text, textColor);
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    int textWidth = surface->w;
+    int textHeight = surface->h;
+    SDL_Rect buttonRect = { x, y, w, h };
+    if (selected) {
+        SDL_SetRenderDrawColor(renderer, 100, 100, 255, 255);
+    } else {
+        SDL_SetRenderDrawColor(renderer, 50, 50, 150, 255);
+    }
+    SDL_RenderFillRect(renderer, &buttonRect);
+    // Căn giữa text trong ô
+    SDL_Rect textRect = { x + (w - textWidth) / 2, y + (h - textHeight) / 2, textWidth, textHeight };
+    SDL_RenderCopy(renderer, texture, NULL, &textRect);
+    SDL_FreeSurface(surface);
+    SDL_DestroyTexture(texture);
+}
+
 void Game::renderThemeMenu() {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
-
-    SDL_Color textColor = {0,0,0,0};
-    SDL_Color highlightColor = {200, 0, 0, 0};
-    const char* title = "Chon chu de tu";
-    
+    if(backgroundTexture) {
+        SDL_RenderCopy(renderer, backgroundTexture, NULL, NULL);
+    }
+    SDL_Color textColor = {0,0,0,255};
+    const char* title = "Chon Chu De";
     std::vector<std::string> themeNames = themeManager.getThemeNames();
     std::vector<const char*> options;
-    for (const auto& name : themeNames) {
-        options.push_back(name.c_str());
-    }
-    const char* quit = "0) Thoat game";
+    for (const auto& name : themeNames) options.push_back(name.c_str());
+    const char* quit = "Thoat Game";
     options.push_back(quit);
 
-    SDL_Surface* s1 = TTF_RenderText_Solid(font, title, textColor);
+    SDL_Surface* s1 = TTF_RenderText_Solid(fontSmall, title, textColor);
     SDL_Texture* t1 = SDL_CreateTextureFromSurface(renderer, s1);
-    SDL_Rect r1 = {300, 100, s1->w, s1->h};
+    SDL_Rect r1 = {50, 40, s1->w, s1->h};
     SDL_RenderCopy(renderer, t1, NULL, &r1);
-
-    int yPos = 150;
-    for (size_t i = 0; i < options.size(); i++) {
-        SDL_Surface* s = TTF_RenderText_Solid(font, options[i], (themeMenuIndex==(int)i)?highlightColor:textColor);
-        SDL_Texture* t = SDL_CreateTextureFromSurface(renderer, s);
-        SDL_Rect r = {300, yPos, s->w, s->h};
-        SDL_RenderCopy(renderer, t, NULL, &r);
-        SDL_FreeSurface(s);
-        SDL_DestroyTexture(t);
-        yPos += 40;
-    }
-
     SDL_FreeSurface(s1);
     SDL_DestroyTexture(t1);
+
+    int themeCount = themeManager.getThemeCount();
+    int columns = 3;
+    int rows = 2; // luôn vẽ tối đa 6 ô kể cả ít chủ đề hơn
+    int buttonW = 220, buttonH = 160;
+    int marginX = 45;
+    int marginY = 30;
+    int startX = 50;
+    int startY = 110;
+    themeButtonRects.clear();
+    int idx = 0;
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < columns; ++col) {
+            int x = startX + col * (buttonW + marginX);
+            int y = startY + row * (buttonH + marginY);
+            SDL_Rect rect = {x, y, buttonW, buttonH};
+            themeButtonRects.push_back(rect);
+            if(idx < themeCount)
+                renderButton(options[idx], rect.x, rect.y, themeMenuIndex == idx, buttonW, buttonH);
+            ++idx;
+        }
+    }
+    // Nút quit siêu to ở dưới góc trái
+    int quitBtnX = startX;
+    int quitBtnY = startY + 2 * (buttonH + marginY);
+    SDL_Rect quitRect = {quitBtnX, quitBtnY, buttonW, buttonH};
+    themeButtonRects.push_back(quitRect);
+    renderButton(quit, quitRect.x, quitRect.y, (themeMenuIndex == (int)options.size()-1), buttonW, buttonH);
     SDL_RenderPresent(renderer);
 }
 
 void Game::renderDifficultyMenu() {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
+    if(backgroundTexture) {
+        SDL_RenderCopy(renderer, backgroundTexture, NULL, NULL);
+    }
 
     SDL_Color textColor = {0,0,0,0};
-    SDL_Color highlightColor = {200, 0, 0, 0};
     const char* title = "Chon do kho";
-    const char* opt1 = "1) De (tu ngan)";
-    const char* opt2 = "2) Vua (tu vua)";
-    const char* opt3 = "3) Kho (tu dai)";
-    const char* opt4 = "0) Quay lai";
+    const char* opt1 = "De (tu ngan)";
+    const char* opt2 = "Vua (tu vua)";
+    const char* opt3 = "Kho (tu dai)";
+    const char* opt4 = "Quay lai";
 
-    SDL_Surface* s1 = TTF_RenderText_Solid(font, title, textColor);
-    SDL_Surface* s2 = TTF_RenderText_Solid(font, opt1, (difficultyMenuIndex==0)?highlightColor:textColor);
-    SDL_Surface* s3 = TTF_RenderText_Solid(font, opt2, (difficultyMenuIndex==1)?highlightColor:textColor);
-    SDL_Surface* s4 = TTF_RenderText_Solid(font, opt3, (difficultyMenuIndex==2)?highlightColor:textColor);
-    SDL_Surface* s5 = TTF_RenderText_Solid(font, opt4, (difficultyMenuIndex==3)?highlightColor:textColor);
-
+    SDL_Surface* s1 = TTF_RenderText_Solid(fontSmall, title, textColor);
     SDL_Texture* t1 = SDL_CreateTextureFromSurface(renderer, s1);
-    SDL_Texture* t2 = SDL_CreateTextureFromSurface(renderer, s2);
-    SDL_Texture* t3 = SDL_CreateTextureFromSurface(renderer, s3);
-    SDL_Texture* t4 = SDL_CreateTextureFromSurface(renderer, s4);
-    SDL_Texture* t5 = SDL_CreateTextureFromSurface(renderer, s5);
-
-    SDL_Rect r1 = {300, 150, s1->w, s1->h};
-    SDL_Rect r2 = {300, 220, s2->w, s2->h};
-    SDL_Rect r3 = {300, 260, s3->w, s3->h};
-    SDL_Rect r4 = {300, 300, s4->w, s4->h};
-    SDL_Rect r5 = {300, 340, s5->w, s5->h};
-
+    SDL_Rect r1 = {300, 100, s1->w, s1->h};
     SDL_RenderCopy(renderer, t1, NULL, &r1);
-    SDL_RenderCopy(renderer, t2, NULL, &r2);
-    SDL_RenderCopy(renderer, t3, NULL, &r3);
-    SDL_RenderCopy(renderer, t4, NULL, &r4);
-    SDL_RenderCopy(renderer, t5, NULL, &r5);
+    SDL_FreeSurface(s1);
+    SDL_DestroyTexture(t1);
 
-    SDL_FreeSurface(s1); SDL_FreeSurface(s2); SDL_FreeSurface(s3); SDL_FreeSurface(s4); SDL_FreeSurface(s5);
-    SDL_DestroyTexture(t1); SDL_DestroyTexture(t2); SDL_DestroyTexture(t3); SDL_DestroyTexture(t4); SDL_DestroyTexture(t5);
+    difficultyButtonRects.clear();
+    SDL_Surface* s_opt1 = TTF_RenderText_Solid(font, opt1, {255,255,255,255});
+    SDL_Surface* s_opt2 = TTF_RenderText_Solid(font, opt2, {255,255,255,255});
+    SDL_Surface* s_opt3 = TTF_RenderText_Solid(font, opt3, {255,255,255,255});
+    SDL_Surface* s_opt4 = TTF_RenderText_Solid(font, opt4, {255,255,255,255});
+
+    difficultyButtonRects.push_back({300, 150, s_opt1->w + 20, s_opt1->h + 10});
+    difficultyButtonRects.push_back({300, 210, s_opt2->w + 20, s_opt2->h + 10});
+    difficultyButtonRects.push_back({300, 270, s_opt3->w + 20, s_opt3->h + 10});
+    difficultyButtonRects.push_back({300, 330, s_opt4->w + 20, s_opt4->h + 10});
+
+    SDL_FreeSurface(s_opt1);
+    SDL_FreeSurface(s_opt2);
+    SDL_FreeSurface(s_opt3);
+    SDL_FreeSurface(s_opt4);
+
+    renderButton(opt1, difficultyButtonRects[0].x, difficultyButtonRects[0].y, difficultyMenuIndex == 0, difficultyButtonRects[0].w, difficultyButtonRects[0].h);
+    renderButton(opt2, difficultyButtonRects[1].x, difficultyButtonRects[1].y, difficultyMenuIndex == 1, difficultyButtonRects[1].w, difficultyButtonRects[1].h);
+    renderButton(opt3, difficultyButtonRects[2].x, difficultyButtonRects[2].y, difficultyMenuIndex == 2, difficultyButtonRects[2].w, difficultyButtonRects[2].h);
+    renderButton(opt4, difficultyButtonRects[3].x, difficultyButtonRects[3].y, difficultyMenuIndex == 3, difficultyButtonRects[3].w, difficultyButtonRects[3].h);
+
 
     SDL_RenderPresent(renderer);
 }
@@ -142,12 +182,12 @@ void Game::renderConfirmExit() {
 void Game::startNewGame() {
     // Lấy từ theo chủ đề đã chọn
     std::vector<std::string> words = themeManager.getWordsByTheme(selectedTheme);
-    
+
     if (words.empty()) {
         // Fallback nếu không có từ nào
         secretWord = "hangman";
     } else {
-        // Filter words by difficulty
+        // do kho
         std::vector<std::string> filtered;
         for(const auto& w : words) {
             size_t len = w.size();
@@ -170,7 +210,6 @@ void Game::startNewGame() {
     wrongGuesses = 0;
     guessedWord = std::string(secretWord.length(), '_');
 
-    // attempts per difficulty
     if(difficulty == DIFF_EASY) maxAttempts = 6;
     else if(difficulty == DIFF_MEDIUM) maxAttempts = 6;
     else maxAttempts = 6;
@@ -179,8 +218,10 @@ void Game::startNewGame() {
 void Game::processInput(char guess) {
     guess = tolower(guess);
     if (std::find(guessedLetters.begin(), guessedLetters.end(), guess) != guessedLetters.end()) {
-        std::cout << "Ban da doan chu '" << guess << "' roi!\n";
+        guessMessage = std::string("Ban da doan chu : '") + guess + "' roi!";
         return;
+    } else {
+        guessMessage.clear();
     }
     guessedLetters.push_back(guess);
     bool correct = false;
@@ -220,6 +261,14 @@ void Game::renderGame() {
     SDL_Rect guessedRect = {50, 480, guessedSurface->w, guessedSurface->h};
     SDL_RenderCopy(renderer, guessedTexture, NULL, &guessedRect);
 
+    if (!guessMessage.empty()) {
+        SDL_Surface* msgSurface = TTF_RenderText_Solid(font, guessMessage.c_str(), SDL_Color{255,0,0,0});
+        SDL_Texture* msgTexture = SDL_CreateTextureFromSurface(renderer, msgSurface);
+        SDL_Rect msgRect = {50, 520, msgSurface->w, msgSurface->h};
+        SDL_RenderCopy(renderer, msgTexture, NULL, &msgRect);
+        SDL_FreeSurface(msgSurface);
+        SDL_DestroyTexture(msgTexture);
+    }
 
     SDL_FreeSurface(wordSurface);
     SDL_FreeSurface(guessedSurface);
@@ -233,7 +282,7 @@ void Game::renderResult() {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
 
-    // Show final hangman image as background context
+
     if(wrongGuesses >= 0 && wrongGuesses < (int)hangmanImages.size() && hangmanImages[wrongGuesses]) {
         SDL_RenderCopy(renderer, hangmanImages[wrongGuesses], NULL, NULL);
     }
@@ -272,39 +321,62 @@ void Game::run() {
             if(event.type == SDL_QUIT) isRunning = false;
 
             if(state == STATE_THEME_SELECT) {
+                if (event.type == SDL_MOUSEBUTTONDOWN) {
+                    int x, y;
+                    SDL_GetMouseState(&x, &y);
+                    for (size_t i = 0; i < themeButtonRects.size(); ++i) {
+                        if (x >= themeButtonRects[i].x && x <= themeButtonRects[i].x + themeButtonRects[i].w &&
+                            y >= themeButtonRects[i].y && y <= themeButtonRects[i].y + themeButtonRects[i].h) {
+                            if (i < themeManager.getThemeNames().size()) {
+                                selectedTheme = (ThemeManager::Theme)i;
+                                state = STATE_DIFFICULTY_SELECT;
+                            } else {
+                                state = STATE_CONFIRM_EXIT;
+                            }
+                        }
+                    }
+                }
                 if(event.type == SDL_KEYDOWN) {
                     SDL_Keycode key = event.key.keysym.sym;
-                    if(key == SDLK_1) { selectedTheme = ThemeManager::THEME_ANIMALS; state = STATE_DIFFICULTY_SELECT; }
-                    else if(key == SDLK_2) { selectedTheme = ThemeManager::THEME_FOOD; state = STATE_DIFFICULTY_SELECT; }
-                    else if(key == SDLK_3) { selectedTheme = ThemeManager::THEME_NATURE; state = STATE_DIFFICULTY_SELECT; }
-                    else if(key == SDLK_4) { selectedTheme = ThemeManager::THEME_TECHNOLOGY; state = STATE_DIFFICULTY_SELECT; }
-                    else if(key == SDLK_5) { selectedTheme = ThemeManager::THEME_SPORTS; state = STATE_DIFFICULTY_SELECT; }
-                    else if(key == SDLK_0 || key == SDLK_ESCAPE) { state = STATE_CONFIRM_EXIT; }
-                    else if(key == SDLK_UP) { if(themeMenuIndex > 0) themeMenuIndex--; }
-                    else if(key == SDLK_DOWN) { if(themeMenuIndex < 5) themeMenuIndex++; }
+                    if(key == SDLK_UP) { if(themeMenuIndex > 0) themeMenuIndex--; }
+                    else if(key == SDLK_DOWN) { if(themeMenuIndex < (int)themeManager.getThemeNames().size()) themeMenuIndex++; }
                     else if(key == SDLK_RETURN || key == SDLK_KP_ENTER) {
-                        if(themeMenuIndex == 0) { selectedTheme = ThemeManager::THEME_ANIMALS; state = STATE_DIFFICULTY_SELECT; }
-                        else if(themeMenuIndex == 1) { selectedTheme = ThemeManager::THEME_FOOD; state = STATE_DIFFICULTY_SELECT; }
-                        else if(themeMenuIndex == 2) { selectedTheme = ThemeManager::THEME_NATURE; state = STATE_DIFFICULTY_SELECT; }
-                        else if(themeMenuIndex == 3) { selectedTheme = ThemeManager::THEME_TECHNOLOGY; state = STATE_DIFFICULTY_SELECT; }
-                        else if(themeMenuIndex == 4) { selectedTheme = ThemeManager::THEME_SPORTS; state = STATE_DIFFICULTY_SELECT; }
-                        else if(themeMenuIndex == 5) { state = STATE_CONFIRM_EXIT; }
+                        if (themeMenuIndex < (int)themeManager.getThemeNames().size()) {
+                            selectedTheme = (ThemeManager::Theme)themeMenuIndex;
+                            state = STATE_DIFFICULTY_SELECT;
+                        } else {
+                            state = STATE_CONFIRM_EXIT;
+                        }
+                    } else if (key == SDLK_ESCAPE) {
+                        state = STATE_CONFIRM_EXIT;
                     }
                 }
             } else if(state == STATE_DIFFICULTY_SELECT) {
+                 if (event.type == SDL_MOUSEBUTTONDOWN) {
+                    int x, y;
+                    SDL_GetMouseState(&x, &y);
+
+                    if (x >= difficultyButtonRects[0].x && x <= difficultyButtonRects[0].x + difficultyButtonRects[0].w && y >= difficultyButtonRects[0].y && y <= difficultyButtonRects[0].y + difficultyButtonRects[0].h) {
+                        difficulty = DIFF_EASY; startNewGame(); state = STATE_PLAYING;
+                    } else if (x >= difficultyButtonRects[1].x && x <= difficultyButtonRects[1].x + difficultyButtonRects[1].w && y >= difficultyButtonRects[1].y && y <= difficultyButtonRects[1].y + difficultyButtonRects[1].h) {
+                        difficulty = DIFF_MEDIUM; startNewGame(); state = STATE_PLAYING;
+                    } else if (x >= difficultyButtonRects[2].x && x <= difficultyButtonRects[2].x + difficultyButtonRects[2].w && y >= difficultyButtonRects[2].y && y <= difficultyButtonRects[2].y + difficultyButtonRects[2].h) {
+                        difficulty = DIFF_HARD; startNewGame(); state = STATE_PLAYING;
+                    } else if (x >= difficultyButtonRects[3].x && x <= difficultyButtonRects[3].x + difficultyButtonRects[3].w && y >= difficultyButtonRects[3].y && y <= difficultyButtonRects[3].y + difficultyButtonRects[3].h) {
+                        state = STATE_THEME_SELECT;
+                    }
+                }
                 if(event.type == SDL_KEYDOWN) {
                     SDL_Keycode key = event.key.keysym.sym;
-                    if(key == SDLK_1) { difficulty = DIFF_EASY; startNewGame(); state = STATE_PLAYING; }
-                    else if(key == SDLK_2) { difficulty = DIFF_MEDIUM; startNewGame(); state = STATE_PLAYING; }
-                    else if(key == SDLK_3) { difficulty = DIFF_HARD; startNewGame(); state = STATE_PLAYING; }
-                    else if(key == SDLK_0 || key == SDLK_ESCAPE) { state = STATE_THEME_SELECT; }
-                    else if(key == SDLK_UP) { if(difficultyMenuIndex > 0) difficultyMenuIndex--; }
+                    if(key == SDLK_UP) { if(difficultyMenuIndex > 0) difficultyMenuIndex--; }
                     else if(key == SDLK_DOWN) { if(difficultyMenuIndex < 3) difficultyMenuIndex++; }
                     else if(key == SDLK_RETURN || key == SDLK_KP_ENTER) {
                         if(difficultyMenuIndex == 0) { difficulty = DIFF_EASY; startNewGame(); state = STATE_PLAYING; }
                         else if(difficultyMenuIndex == 1) { difficulty = DIFF_MEDIUM; startNewGame(); state = STATE_PLAYING; }
                         else if(difficultyMenuIndex == 2) { difficulty = DIFF_HARD; startNewGame(); state = STATE_PLAYING; }
                         else if(difficultyMenuIndex == 3) { state = STATE_THEME_SELECT; }
+                    } else if (key == SDLK_ESCAPE) {
+                        state = STATE_THEME_SELECT;
                     }
                 }
             } else if(state == STATE_CONFIRM_EXIT) {
@@ -333,7 +405,7 @@ void Game::run() {
             renderGame();
             if(isGameOver()) {
                 renderResult();
-                state = STATE_THEME_SELECT; // Return to theme selection after a short pause
+                state = STATE_THEME_SELECT;
             }
         }
         SDL_Delay(16);
@@ -344,8 +416,12 @@ Game::~Game() {
     if (font) {
         TTF_CloseFont(font);
     }
+    if (fontSmall) {
+        TTF_CloseFont(fontSmall);
+    }
     TTF_Quit();
     for(auto texture : hangmanImages) SDL_DestroyTexture(texture);
+    SDL_DestroyTexture(backgroundTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();
