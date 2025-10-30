@@ -80,3 +80,4 @@ std::string ThemeManager::getThemeName(Theme theme) const {
 int ThemeManager::getThemeCount() const {
     return themeNames.size();
 }
+
