@@ -65,6 +65,69 @@ void Game::renderButton(const char* text, int x, int y, bool selected, int w, in
     SDL_DestroyTexture(texture);
 }
 
+void Game::renderKeyboard() {
+    // QWERTY layout, compact for 800x600
+    const std::string row1 = "QWERTYUIOP";
+    const std::string row2 = "ASDFGHJKL";
+    const std::string row3 = "ZXCVBNM";
+
+    int buttonW = 40;
+    int buttonH = 24;
+    int gapX = 6;
+    int gapY = 6;
+    int startY = 540; // keep below messages
+
+    // Center rows
+    auto drawRow = [&](const std::string& keys, int y, int offsetX) {
+        int totalW = (int)keys.size() * buttonW + ((int)keys.size() - 1) * gapX;
+        int startX = (800 - totalW) / 2 + offsetX;
+        for (size_t i = 0; i < keys.size(); ++i) {
+            SDL_Rect r{ startX + (int)i * (buttonW + gapX), y, buttonW, buttonH };
+
+            // Track for hit testing
+            // If already stored same size as keys per frame, rebuild vectors
+            // Rebuild every frame to keep it simple
+            keyboardKeyRects.push_back(r);
+            keyboardKeyChars.push_back((char)tolower(keys[i]));
+
+            char lower = (char)tolower(keys[i]);
+            bool guessed = std::find(guessedLetters.begin(), guessedLetters.end(), lower) != guessedLetters.end();
+            bool inWord = std::find(secretWord.begin(), secretWord.end(), lower) != secretWord.end();
+
+            if (!guessed) {
+                SDL_SetRenderDrawColor(renderer, 230, 230, 230, 255);
+            } else {
+                // Guessed: green if correct, red if wrong
+                if (inWord) SDL_SetRenderDrawColor(renderer, 120, 200, 120, 255);
+                else SDL_SetRenderDrawColor(renderer, 220, 120, 120, 255);
+            }
+            SDL_RenderFillRect(renderer, &r);
+            SDL_SetRenderDrawColor(renderer, 60, 60, 60, 255);
+            SDL_RenderDrawRect(renderer, &r);
+
+            // Draw letter centered
+            std::string label(1, keys[i]);
+            SDL_Color txtColor = { 20, 20, 20, 255 };
+            SDL_Surface* s = TTF_RenderText_Solid(font, label.c_str(), txtColor);
+            if (s) {
+                SDL_Texture* t = SDL_CreateTextureFromSurface(renderer, s);
+                SDL_Rect tr{ r.x + (r.w - s->w) / 2, r.y + (r.h - s->h) / 2, s->w, s->h };
+                SDL_RenderCopy(renderer, t, NULL, &tr);
+                SDL_FreeSurface(s);
+                SDL_DestroyTexture(t);
+            }
+        }
+    };
+
+    // Clear storage before rebuilding layout
+    keyboardKeyRects.clear();
+    keyboardKeyChars.clear();
+
+    drawRow(row1, startY, 0);
+    drawRow(row2, startY + buttonH + gapY, 10); // slight indent for row2
+    drawRow(row3, startY + 2 * (buttonH + gapY), 40); // more indent for row3
+}
+
 void Game::renderThemeMenu() {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
     SDL_RenderClear(renderer);
@@ -275,6 +338,9 @@ void Game::renderGame() {
     SDL_DestroyTexture(wordTexture);
     SDL_DestroyTexture(guessedTexture);
 
+    // Render on-screen keyboard
+    renderKeyboard();
+
     SDL_RenderPresent(renderer);
 }
 
@@ -390,6 +456,18 @@ void Game::run() {
                     char guess = (char)event.key.keysym.sym;
                     if(isalpha((unsigned char)guess)) {
                         processInput(guess);
+                    }
+                } else if (event.type == SDL_MOUSEBUTTONDOWN) {
+                    int mx, my;
+                    SDL_GetMouseState(&mx, &my);
+                    // Hit-test keyboard buttons
+                    for (size_t i = 0; i < keyboardKeyRects.size(); ++i) {
+                        const SDL_Rect& r = keyboardKeyRects[i];
+                        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
+                            char c = keyboardKeyChars[i];
+                            processInput(c);
+                            break;
+                        }
                     }
                 }
             }
