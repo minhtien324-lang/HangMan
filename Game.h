@@ -38,6 +38,9 @@ private:
     std::vector<SDL_Rect> themeButtonRects;
     std::vector<SDL_Rect> difficultyButtonRects;
     std::string guessMessage;
+    // Virtual keyboard
+    std::vector<SDL_Rect> keyboardKeyRects;
+    std::vector<char> keyboardKeyChars;
     void loadTextures();
     void processInput(char guess);
     void renderGame();
@@ -48,6 +51,7 @@ private:
     void renderResult();
     void startNewGame();
     void renderButton(const char* text, int x, int y, bool selected, int w, int h);
+    void renderKeyboard();
 };
 
 #endif
