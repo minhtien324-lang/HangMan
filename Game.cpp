@@ -1,5 +1,4 @@
 #include "Game.h"
-#include "textureManager.h"
 #include <SDL_ttf.h>
 #include <iostream>
 #include <fstream>
@@ -8,372 +7,405 @@
 #include <algorithm>
 #include <cctype>
 #include <sstream>
-Game::Game() : window(nullptr), renderer(nullptr), wrongGuesses(0), isRunning(true) {
+#include <cmath>
+
+namespace {
+    const SDL_Color COLOR_BACKGROUND{245, 245, 245, 255};
+    const SDL_Color COLOR_TEXT{30, 30, 30, 255};
+    const SDL_Color COLOR_SUBTEXT{80, 80, 80, 255};
+    const SDL_Color COLOR_ALERT{220, 20, 60, 255};
+    const SDL_Color COLOR_BUTTON{230, 230, 230, 255};
+    const SDL_Color COLOR_BUTTON_DISABLED{200, 200, 200, 255};
+    const SDL_Color COLOR_BUTTON_SELECTED{160, 190, 255, 255};
+    const SDL_Color COLOR_BUTTON_BORDER{90, 90, 90, 255};
+}
+Game::Game() : window(nullptr), renderer(nullptr), wrongGuesses(0), isRunning(true),
+    state(STATE_THEME_SELECT), difficulty(DIFF_EASY), selectedTheme(ThemeManager::THEME_ANIMALS),
+    maxAttempts(MAX_ATTEMPTS), themeMenuIndex(0), difficultyMenuIndex(0),
+    showingResult(false), lastWin(false), playedGames(0), wonGames(0) {
     SDL_Init(SDL_INIT_VIDEO);
-    window = SDL_CreateWindow("Hangman", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600,0);
+    window = SDL_CreateWindow("Hangman", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, 0);
+    if (!window) {
+        std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
+        exit(1);
+    }
 
     if (TTF_Init() == -1) {
         std::cerr << "SDL_ttf could not initialize! Error: " << TTF_GetError() << std::endl;
         exit(1);
     }
-    font = TTF_OpenFont("roboto.ttf", 20);
-    fontSmall = TTF_OpenFont("roboto.ttf", 36); // tạo thêm biến này cho menu ngoài
-    if (!font) {
+
+    fontLarge = TTF_OpenFont("roboto.ttf", 36);
+    fontMedium = TTF_OpenFont("roboto.ttf", 24);
+    fontSmall = TTF_OpenFont("roboto.ttf", 18);
+    if (!fontLarge || !fontMedium || !fontSmall) {
         std::cerr << "Failed to load font! Error: " << TTF_GetError() << std::endl;
         exit(1);
     }
 
-    //
-    state = STATE_THEME_SELECT;
-    difficulty = DIFF_EASY;
-    selectedTheme = ThemeManager::THEME_ANIMALS;
-    maxAttempts = MAX_ATTEMPTS;
-    themeMenuIndex = 0;
-    difficultyMenuIndex = 0;
-
-
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-    loadTextures();
-}
-
-void Game::loadTextures() {
-    backgroundTexture = TextureManager::LoadTexture("background.png", renderer);
-    for(int i = 0; i < 7; i++) {
-        std::string path = "hangman_" + std::to_string(i) + ".png";
-        SDL_Texture* texture = TextureManager::LoadTexture(path, renderer);
-        hangmanImages.push_back(texture);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (!renderer) {
+        std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << std::endl;
+        exit(1);
     }
+
+    initializeLetterButtons();
 }
 
-void Game::renderButton(const char* text, int x, int y, bool selected, int w, int h) {
-    SDL_Color textColor = { 255, 255, 255, 255 };
-    SDL_Surface* surface = TTF_RenderText_Solid(font, text, textColor);
+void Game::renderButton(const std::string& text, const SDL_Rect& rect, bool selected, TTF_Font* font) {
+    SDL_Color fill = selected ? COLOR_BUTTON_SELECTED : COLOR_BUTTON;
+    drawRect(rect, fill, COLOR_BUTTON_BORDER);
+    drawTextCentered(text, rect, COLOR_TEXT, font);
+}
+
+void Game::drawRect(const SDL_Rect& rect, SDL_Color fill, SDL_Color border) {
+    SDL_SetRenderDrawColor(renderer, fill.r, fill.g, fill.b, fill.a);
+    SDL_RenderFillRect(renderer, &rect);
+    SDL_SetRenderDrawColor(renderer, border.r, border.g, border.b, border.a);
+    SDL_RenderDrawRect(renderer, &rect);
+}
+
+void Game::drawText(const std::string& text, int x, int y, SDL_Color color, TTF_Font* font) {
+    if (!font) {
+        font = fontMedium;
+    }
+    SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), color);
+    if (!surface) return;
     SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
-    int textWidth = surface->w;
-    int textHeight = surface->h;
-    SDL_Rect buttonRect = { x, y, w, h };
-    if (selected) {
-        SDL_SetRenderDrawColor(renderer, 100, 100, 255, 255);
-    } else {
-        SDL_SetRenderDrawColor(renderer, 50, 50, 150, 255);
-    }
-    SDL_RenderFillRect(renderer, &buttonRect);
-    // Căn giữa text trong ô
-    SDL_Rect textRect = { x + (w - textWidth) / 2, y + (h - textHeight) / 2, textWidth, textHeight };
-    SDL_RenderCopy(renderer, texture, NULL, &textRect);
+    SDL_Rect dst { x, y, surface->w, surface->h };
     SDL_FreeSurface(surface);
+    if (!texture) return;
+    SDL_RenderCopy(renderer, texture, nullptr, &dst);
     SDL_DestroyTexture(texture);
 }
 
-void Game::renderKeyboard() {
-    // QWERTY layout, compact for 800x600
-    const std::string row1 = "QWERTYUIOP";
-    const std::string row2 = "ASDFGHJKL";
-    const std::string row3 = "ZXCVBNM";
+void Game::drawTextCentered(const std::string& text, const SDL_Rect& rect, SDL_Color color, TTF_Font* font) {
+    if (!font) {
+        font = fontMedium;
+    }
+    SDL_Surface* surface = TTF_RenderUTF8_Blended(font, text.c_str(), color);
+    if (!surface) return;
+    SDL_Texture* texture = SDL_CreateTextureFromSurface(renderer, surface);
+    if (!texture) {
+        SDL_FreeSurface(surface);
+        return;
+    }
+    SDL_Rect dst{
+        rect.x + (rect.w - surface->w) / 2,
+        rect.y + (rect.h - surface->h) / 2,
+        surface->w,
+        surface->h
+    };
+    SDL_FreeSurface(surface);
+    SDL_RenderCopy(renderer, texture, nullptr, &dst);
+    SDL_DestroyTexture(texture);
+}
 
-    int buttonW = 40;
-    int buttonH = 24;
-    int gapX = 6;
-    int gapY = 6;
-    int startY = 540; // keep below messages
+void Game::drawScaffold() {
+    const int originX = 80;
+    const int originY = 60;
+    const int canvasHeight = 400;
 
-    // Center rows
-    auto drawRow = [&](const std::string& keys, int y, int offsetX) {
-        int totalW = (int)keys.size() * buttonW + ((int)keys.size() - 1) * gapX;
-        int startX = (800 - totalW) / 2 + offsetX;
-        for (size_t i = 0; i < keys.size(); ++i) {
-            SDL_Rect r{ startX + (int)i * (buttonW + gapX), y, buttonW, buttonH };
-
-            // Track for hit testing
-            // If already stored same size as keys per frame, rebuild vectors
-            // Rebuild every frame to keep it simple
-            keyboardKeyRects.push_back(r);
-            keyboardKeyChars.push_back((char)tolower(keys[i]));
-
-            char lower = (char)tolower(keys[i]);
-            bool guessed = std::find(guessedLetters.begin(), guessedLetters.end(), lower) != guessedLetters.end();
-            bool inWord = std::find(secretWord.begin(), secretWord.end(), lower) != secretWord.end();
-
-            if (!guessed) {
-                SDL_SetRenderDrawColor(renderer, 230, 230, 230, 255);
-            } else {
-                // Guessed: green if correct, red if wrong
-                if (inWord) SDL_SetRenderDrawColor(renderer, 120, 200, 120, 255);
-                else SDL_SetRenderDrawColor(renderer, 220, 120, 120, 255);
-            }
-            SDL_RenderFillRect(renderer, &r);
-            SDL_SetRenderDrawColor(renderer, 60, 60, 60, 255);
-            SDL_RenderDrawRect(renderer, &r);
-
-            // Draw letter centered
-            std::string label(1, keys[i]);
-            SDL_Color txtColor = { 20, 20, 20, 255 };
-            SDL_Surface* s = TTF_RenderText_Solid(font, label.c_str(), txtColor);
-            if (s) {
-                SDL_Texture* t = SDL_CreateTextureFromSurface(renderer, s);
-                SDL_Rect tr{ r.x + (r.w - s->w) / 2, r.y + (r.h - s->h) / 2, s->w, s->h };
-                SDL_RenderCopy(renderer, t, NULL, &tr);
-                SDL_FreeSurface(s);
-                SDL_DestroyTexture(t);
-            }
+    auto mapX = [&](int x) { return originX + x; };
+    auto mapY = [&](int y) { return originY + (canvasHeight - y); };
+    auto drawLine = [&](int x1, int y1, int x2, int y2, int thickness) {
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+        int sx1 = mapX(x1);
+        int sy1 = mapY(y1);
+        int sx2 = mapX(x2);
+        int sy2 = mapY(y2);
+        for (int i = 0; i < thickness; ++i) {
+            SDL_RenderDrawLine(renderer, sx1, sy1 + i, sx2, sy2 + i);
         }
     };
 
-    // Clear storage before rebuilding layout
-    keyboardKeyRects.clear();
-    keyboardKeyChars.clear();
+    drawLine(40, 55, 180, 55, 10);
+    drawLine(165, 60, 165, 365, 10);
+    drawLine(160, 360, 100, 360, 10);
+    drawLine(100, 365, 100, 330, 10);
+    drawLine(100, 330, 100, 310, 1);
+}
 
-    drawRow(row1, startY, 0);
-    drawRow(row2, startY + buttonH + gapY, 10); // slight indent for row2
-    drawRow(row3, startY + 2 * (buttonH + gapY), 40); // more indent for row3
+void Game::drawHangedMan() {
+    const int originX = 80;
+    const int originY = 60;
+    const int canvasHeight = 400;
+
+    auto mapX = [&](int x) { return originX + x; };
+    auto mapY = [&](int y) { return originY + (canvasHeight - y); };
+    auto drawSegment = [&](int x1, int y1, int x2, int y2) {
+        SDL_RenderDrawLine(renderer, mapX(x1), mapY(y1), mapX(x2), mapY(y2));
+    };
+
+    SDL_SetRenderDrawColor(renderer, COLOR_ALERT.r, COLOR_ALERT.g, COLOR_ALERT.b, COLOR_ALERT.a);
+
+    if (wrongGuesses >= 1) {
+        const int cx = mapX(100);
+        const int cy = mapY(290);
+        const int radius = 20;
+        constexpr double PI = 3.14159265358979323846;
+        for (int deg = 0; deg < 360; ++deg) {
+            double rad = deg * PI / 180.0;
+            double nextRad = (deg + 1) * PI / 180.0;
+            int x1 = static_cast<int>(cx + radius * std::cos(rad));
+            int y1 = static_cast<int>(cy + radius * std::sin(rad));
+            int x2 = static_cast<int>(cx + radius * std::cos(nextRad));
+            int y2 = static_cast<int>(cy + radius * std::sin(nextRad));
+            SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
+        }
+    }
+    if (wrongGuesses >= 2) {
+        drawSegment(100, 270, 100, 170);
+    }
+    if (wrongGuesses >= 3) {
+        drawSegment(100, 250, 80, 250);
+        drawSegment(80, 250, 60, 210);
+        drawSegment(60, 210, 60, 190);
+    }
+    if (wrongGuesses >= 4) {
+        drawSegment(100, 250, 120, 250);
+        drawSegment(120, 250, 140, 210);
+        drawSegment(140, 210, 140, 190);
+    }
+    if (wrongGuesses >= 5) {
+        drawSegment(100, 170, 80, 170);
+        drawSegment(80, 170, 70, 140);
+        drawSegment(70, 140, 70, 80);
+        drawSegment(70, 80, 60, 80);
+    }
+    if (wrongGuesses >= 6) {
+        drawSegment(100, 170, 120, 170);
+        drawSegment(120, 170, 130, 140);
+        drawSegment(130, 140, 130, 80);
+        drawSegment(130, 80, 140, 80);
+    }
+}
+
+std::string Game::buildDisplayedWord() const {
+    std::ostringstream oss;
+    for (size_t i = 0; i < guessedWord.size(); ++i) {
+        char c = guessedWord[i];
+        oss << (c == '_' ? '_' : static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+        if (i + 1 < guessedWord.size()) {
+            oss << ' ';
+        }
+    }
+    return oss.str();
 }
 
 void Game::renderThemeMenu() {
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer, COLOR_BACKGROUND.r, COLOR_BACKGROUND.g, COLOR_BACKGROUND.b, COLOR_BACKGROUND.a);
     SDL_RenderClear(renderer);
-    if(backgroundTexture) {
-        SDL_RenderCopy(renderer, backgroundTexture, NULL, NULL);
-    }
-    SDL_Color textColor = {0,0,0,255};
-    const char* title = "Chon Chu De";
+
+    drawTextCentered("Chon Chu De", SDL_Rect{0, 40, 800, 60}, COLOR_TEXT, fontLarge);
+
     std::vector<std::string> themeNames = themeManager.getThemeNames();
-    std::vector<const char*> options;
-    for (const auto& name : themeNames) options.push_back(name.c_str());
-    const char* quit = "Thoat Game";
-    options.push_back(quit);
+    const std::string quitLabel = "Thoat Game";
 
-    SDL_Surface* s1 = TTF_RenderText_Solid(fontSmall, title, textColor);
-    SDL_Texture* t1 = SDL_CreateTextureFromSurface(renderer, s1);
-    SDL_Rect r1 = {50, 40, s1->w, s1->h};
-    SDL_RenderCopy(renderer, t1, NULL, &r1);
-    SDL_FreeSurface(s1);
-    SDL_DestroyTexture(t1);
+    int themeCount = static_cast<int>(themeNames.size());
+    int totalOptions = themeCount + 1; // + quit
+    if (themeMenuIndex >= totalOptions) {
+        themeMenuIndex = totalOptions - 1;
+    }
 
-    int themeCount = themeManager.getThemeCount();
-    int columns = 3;
-    int rows = 2; // luôn vẽ tối đa 6 ô kể cả ít chủ đề hơn
-    int buttonW = 220, buttonH = 160;
-    int marginX = 45;
-    int marginY = 30;
-    int startX = 50;
-    int startY = 110;
+    const int columns = 3;
+    const int rows = 2;
+    const int buttonW = 200;
+    const int buttonH = 110;
+    const int gapX = 30;
+    const int gapY = 28;
+    const int startX = 60;
+    const int startY = 120;
+
     themeButtonRects.clear();
     int idx = 0;
     for (int row = 0; row < rows; ++row) {
         for (int col = 0; col < columns; ++col) {
-            int x = startX + col * (buttonW + marginX);
-            int y = startY + row * (buttonH + marginY);
-            SDL_Rect rect = {x, y, buttonW, buttonH};
-            themeButtonRects.push_back(rect);
-            if(idx < themeCount)
-                renderButton(options[idx], rect.x, rect.y, themeMenuIndex == idx, buttonW, buttonH);
+            SDL_Rect rect{
+                startX + col * (buttonW + gapX),
+                startY + row * (buttonH + gapY),
+                buttonW,
+                buttonH
+            };
+            if (idx < themeCount) {
+                themeButtonRects.push_back(rect);
+                renderButton(themeNames[idx], rect, themeMenuIndex == idx, fontMedium);
+            }
             ++idx;
         }
     }
-    // Nút quit siêu to ở dưới góc trái
-    int quitBtnX = startX;
-    int quitBtnY = startY + 2 * (buttonH + marginY);
-    SDL_Rect quitRect = {quitBtnX, quitBtnY, buttonW, buttonH};
+
+    SDL_Rect quitRect{
+        startX,
+        startY + rows * (buttonH + gapY),
+        buttonW,
+        buttonH
+    };
     themeButtonRects.push_back(quitRect);
-    renderButton(quit, quitRect.x, quitRect.y, (themeMenuIndex == (int)options.size()-1), buttonW, buttonH);
+    renderButton(quitLabel, quitRect, themeMenuIndex == themeCount, fontMedium);
+
+    drawTextCentered("Su dung phim mui ten hoac chuot de chon.", SDL_Rect{0, 430, 800, 30}, COLOR_SUBTEXT, fontSmall);
+    drawTextCentered("Nhan Enter de xac nhan.", SDL_Rect{0, 460, 800, 30}, COLOR_SUBTEXT, fontSmall);
+
     SDL_RenderPresent(renderer);
 }
 
 void Game::renderDifficultyMenu() {
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer, COLOR_BACKGROUND.r, COLOR_BACKGROUND.g, COLOR_BACKGROUND.b, COLOR_BACKGROUND.a);
     SDL_RenderClear(renderer);
-    if(backgroundTexture) {
-        SDL_RenderCopy(renderer, backgroundTexture, NULL, NULL);
-    }
 
-    SDL_Color textColor = {0,0,0,0};
-    const char* title = "Chon do kho";
-    const char* opt1 = "De (tu ngan)";
-    const char* opt2 = "Vua (tu vua)";
-    const char* opt3 = "Kho (tu dai)";
-    const char* opt4 = "Quay lai";
+    drawTextCentered("Chon do kho", SDL_Rect{0, 100, 800, 60}, COLOR_TEXT, fontLarge);
 
-    SDL_Surface* s1 = TTF_RenderText_Solid(fontSmall, title, textColor);
-    SDL_Texture* t1 = SDL_CreateTextureFromSurface(renderer, s1);
-    SDL_Rect r1 = {300, 100, s1->w, s1->h};
-    SDL_RenderCopy(renderer, t1, NULL, &r1);
-    SDL_FreeSurface(s1);
-    SDL_DestroyTexture(t1);
+    const std::vector<std::string> options{
+        "De (tu ngan)",
+        "Vua (tu vua)",
+        "Kho (tu dai)",
+        "Quay lai"
+    };
 
     difficultyButtonRects.clear();
-    SDL_Surface* s_opt1 = TTF_RenderText_Solid(font, opt1, {255,255,255,255});
-    SDL_Surface* s_opt2 = TTF_RenderText_Solid(font, opt2, {255,255,255,255});
-    SDL_Surface* s_opt3 = TTF_RenderText_Solid(font, opt3, {255,255,255,255});
-    SDL_Surface* s_opt4 = TTF_RenderText_Solid(font, opt4, {255,255,255,255});
+    const int startX = 260;
+    const int startY = 180;
+    const int buttonW = 280;
+    const int buttonH = 70;
+    const int gapY = 20;
 
-    difficultyButtonRects.push_back({300, 150, s_opt1->w + 20, s_opt1->h + 10});
-    difficultyButtonRects.push_back({300, 210, s_opt2->w + 20, s_opt2->h + 10});
-    difficultyButtonRects.push_back({300, 270, s_opt3->w + 20, s_opt3->h + 10});
-    difficultyButtonRects.push_back({300, 330, s_opt4->w + 20, s_opt4->h + 10});
+    for (size_t i = 0; i < options.size(); ++i) {
+        SDL_Rect rect{
+            startX,
+            startY + static_cast<int>(i) * (buttonH + gapY),
+            buttonW,
+            buttonH
+        };
+        difficultyButtonRects.push_back(rect);
+        renderButton(options[i], rect, difficultyMenuIndex == static_cast<int>(i), fontMedium);
+    }
 
-    SDL_FreeSurface(s_opt1);
-    SDL_FreeSurface(s_opt2);
-    SDL_FreeSurface(s_opt3);
-    SDL_FreeSurface(s_opt4);
-
-    renderButton(opt1, difficultyButtonRects[0].x, difficultyButtonRects[0].y, difficultyMenuIndex == 0, difficultyButtonRects[0].w, difficultyButtonRects[0].h);
-    renderButton(opt2, difficultyButtonRects[1].x, difficultyButtonRects[1].y, difficultyMenuIndex == 1, difficultyButtonRects[1].w, difficultyButtonRects[1].h);
-    renderButton(opt3, difficultyButtonRects[2].x, difficultyButtonRects[2].y, difficultyMenuIndex == 2, difficultyButtonRects[2].w, difficultyButtonRects[2].h);
-    renderButton(opt4, difficultyButtonRects[3].x, difficultyButtonRects[3].y, difficultyMenuIndex == 3, difficultyButtonRects[3].w, difficultyButtonRects[3].h);
-
+    drawTextCentered("Chon do kho phu hop, chuot hoac Enter de bat dau.", SDL_Rect{0, 500, 800, 30}, COLOR_SUBTEXT, fontSmall);
 
     SDL_RenderPresent(renderer);
 }
 
 void Game::renderConfirmExit() {
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer, COLOR_BACKGROUND.r, COLOR_BACKGROUND.g, COLOR_BACKGROUND.b, COLOR_BACKGROUND.a);
     SDL_RenderClear(renderer);
 
-    SDL_Color textColor = {0,0,0,0};
-    const char* title = "Ban co chac muon thoat? (Y/N)";
+    drawTextCentered("Ban co chac muon thoat? (Y/N)", SDL_Rect{0, 260, 800, 40}, COLOR_TEXT, fontMedium);
+    drawTextCentered("Nhan Y de thoat, N de quay lai.", SDL_Rect{0, 320, 800, 30}, COLOR_SUBTEXT, fontSmall);
 
-    SDL_Surface* s1 = TTF_RenderText_Solid(font, title, textColor);
-    SDL_Texture* t1 = SDL_CreateTextureFromSurface(renderer, s1);
-    SDL_Rect r1 = {220, 240, s1->w, s1->h};
-    SDL_RenderCopy(renderer, t1, NULL, &r1);
-
-    SDL_FreeSurface(s1);
-    SDL_DestroyTexture(t1);
     SDL_RenderPresent(renderer);
 }
 
 void Game::startNewGame() {
-    // Lấy từ theo chủ đề đã chọn
     std::vector<std::string> words = themeManager.getWordsByTheme(selectedTheme);
-
     if (words.empty()) {
-        // Fallback nếu không có từ nào
-        secretWord = "hangman";
+        secretWord = "HANGMAN";
     } else {
-        // do kho
         std::vector<std::string> filtered;
-        for(const auto& w : words) {
+        for (const auto& w : words) {
             size_t len = w.size();
-            if(difficulty == DIFF_EASY && len <= 4) filtered.push_back(w);
-            else if(difficulty == DIFF_MEDIUM && len >= 5 && len <= 7) filtered.push_back(w);
-            else if(difficulty == DIFF_HARD && len >= 8) filtered.push_back(w);
+            if (difficulty == DIFF_EASY && len <= 4) filtered.push_back(w);
+            else if (difficulty == DIFF_MEDIUM && len >= 5 && len <= 7) filtered.push_back(w);
+            else if (difficulty == DIFF_HARD && len >= 8) filtered.push_back(w);
         }
+        if (filtered.empty()) filtered = words;
 
-        if(filtered.empty()) filtered = words; // fallback
-
-        srand((unsigned int)time(0));
-        if(!filtered.empty()) {
+        srand(static_cast<unsigned int>(time(nullptr)));
+        if (!filtered.empty()) {
             secretWord = filtered[rand() % filtered.size()];
         } else {
             secretWord = "hangman";
         }
     }
 
-    guessedLetters.clear();
-    wrongGuesses = 0;
-    guessedWord = std::string(secretWord.length(), '_');
+    std::transform(secretWord.begin(), secretWord.end(), secretWord.begin(), [](unsigned char c) {
+        return static_cast<char>(std::toupper(c));
+    });
 
-    if(difficulty == DIFF_EASY) maxAttempts = 6;
-    else if(difficulty == DIFF_MEDIUM) maxAttempts = 6;
+    if (difficulty == DIFF_EASY) maxAttempts = 6;
+    else if (difficulty == DIFF_MEDIUM) maxAttempts = 6;
     else maxAttempts = 6;
+
+    resetRound();
 }
 
 void Game::processInput(char guess) {
-    guess = tolower(guess);
-    if (std::find(guessedLetters.begin(), guessedLetters.end(), guess) != guessedLetters.end()) {
-        guessMessage = std::string("Ban da doan chu : '") + guess + "' roi!";
+    if (showingResult) return;
+    char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(guess)));
+    if (std::find(guessedLetters.begin(), guessedLetters.end(), upper) != guessedLetters.end()) {
         return;
-    } else {
-        guessMessage.clear();
     }
-    guessedLetters.push_back(guess);
+
+    guessedLetters.push_back(upper);
+    setLetterButtonState(upper, true);
+
     bool correct = false;
-    for (size_t i = 0; i < secretWord.length(); i++) {
-        if (secretWord[i] == guess) {
-            guessedWord[i] = guess;
+    for (size_t i = 0; i < secretWord.length(); ++i) {
+        if (secretWord[i] == upper) {
+            guessedWord[i] = upper;
             correct = true;
         }
     }
-    if (!correct) wrongGuesses++;
+    if (!correct) {
+        wrongGuesses += 1;
+    }
+
+    displayWord = buildDisplayedWord();
+
+    if (isGameOver()) {
+        showingResult = true;
+        lastWin = (guessedWord == secretWord);
+        playedGames += 1;
+        if (lastWin) {
+            wonGames += 1;
+        }
+    }
 }
 
 void Game::renderGame() {
-
-    SDL_RenderClear(renderer);
-    SDL_RenderCopy(renderer, hangmanImages[wrongGuesses], NULL, NULL);
-    SDL_Color textColor = {0,0,0,0};
-    std::string wordDisplay;
-    for (char c : guessedWord) {
-        wordDisplay += (c == '_') ? "_ " : std::string(1, c) + " ";
-    }
-
-    SDL_Surface* wordSurface = TTF_RenderText_Solid(font, wordDisplay.c_str(), textColor);
-    SDL_Texture* wordTexture = SDL_CreateTextureFromSurface(renderer, wordSurface);
-    SDL_Rect wordRect = {50, 450, wordSurface->w, wordSurface->h};
-    SDL_RenderCopy(renderer, wordTexture, NULL, &wordRect);
-
-
-    std::string guessedStr = "Da doan: ";
-    for (char c : guessedLetters) {
-        guessedStr += c;
-        guessedStr += ' ';
-    }
-
-    SDL_Surface* guessedSurface = TTF_RenderText_Solid(font, guessedStr.c_str(), textColor);
-    SDL_Texture* guessedTexture = SDL_CreateTextureFromSurface(renderer, guessedSurface);
-    SDL_Rect guessedRect = {50, 480, guessedSurface->w, guessedSurface->h};
-    SDL_RenderCopy(renderer, guessedTexture, NULL, &guessedRect);
-
-    if (!guessMessage.empty()) {
-        SDL_Surface* msgSurface = TTF_RenderText_Solid(font, guessMessage.c_str(), SDL_Color{255,0,0,0});
-        SDL_Texture* msgTexture = SDL_CreateTextureFromSurface(renderer, msgSurface);
-        SDL_Rect msgRect = {50, 520, msgSurface->w, msgSurface->h};
-        SDL_RenderCopy(renderer, msgTexture, NULL, &msgRect);
-        SDL_FreeSurface(msgSurface);
-        SDL_DestroyTexture(msgTexture);
-    }
-
-    SDL_FreeSurface(wordSurface);
-    SDL_FreeSurface(guessedSurface);
-    SDL_DestroyTexture(wordTexture);
-    SDL_DestroyTexture(guessedTexture);
-
-    // Render on-screen keyboard
-    renderKeyboard();
-
-    SDL_RenderPresent(renderer);
-}
-
-void Game::renderResult() {
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
+    SDL_SetRenderDrawColor(renderer, COLOR_BACKGROUND.r, COLOR_BACKGROUND.g, COLOR_BACKGROUND.b, COLOR_BACKGROUND.a);
     SDL_RenderClear(renderer);
 
+    drawScaffold();
+    drawHangedMan();
 
-    if(wrongGuesses >= 0 && wrongGuesses < (int)hangmanImages.size() && hangmanImages[wrongGuesses]) {
-        SDL_RenderCopy(renderer, hangmanImages[wrongGuesses], NULL, NULL);
+    drawText("Hangman", 420, 24, COLOR_TEXT, fontLarge);
+    drawText(displayWord, 80, 480, COLOR_TEXT, fontMedium);
+
+    for (const auto& button : letterButtons) {
+        SDL_Color fill = button.disabled ? COLOR_BUTTON_DISABLED : COLOR_BUTTON;
+        drawRect(button.rect, fill, COLOR_BUTTON_BORDER);
+        drawText(button.label, button.rect.x + 14, button.rect.y + 8, COLOR_TEXT, fontMedium);
     }
 
-    SDL_Color textColor = {0,0,0,0};
-    std::string title = (guessedWord == secretWord) ? "Chuc mung! Ban da thang!" : "Game Over";
-    std::string reveal = std::string("Tu la: ") + secretWord;
+    drawRect(buttonNew, COLOR_BUTTON, COLOR_BUTTON_BORDER);
+    drawText("New", buttonNew.x + 18, buttonNew.y + 8, COLOR_TEXT, fontMedium);
 
-    SDL_Surface* s1 = TTF_RenderText_Solid(font, title.c_str(), textColor);
-    SDL_Surface* s2 = TTF_RenderText_Solid(font, reveal.c_str(), textColor);
+    drawRect(buttonRestart, COLOR_BUTTON, COLOR_BUTTON_BORDER);
+    drawText("Restart", buttonRestart.x + 12, buttonRestart.y + 8, COLOR_TEXT, fontMedium);
 
-    SDL_Texture* t1 = SDL_CreateTextureFromSurface(renderer, s1);
-    SDL_Texture* t2 = SDL_CreateTextureFromSurface(renderer, s2);
+    drawRect(buttonQuit, COLOR_BUTTON, COLOR_BUTTON_BORDER);
+    drawText("Quit", buttonQuit.x + 26, buttonQuit.y + 8, COLOR_TEXT, fontMedium);
 
-    SDL_Rect r1 = {250, 200, s1->w, s1->h};
-    SDL_Rect r2 = {250, 240, s2->w, s2->h};
+    if (showingResult) {
+        SDL_Rect overlay{ 120, 140, 560, 280 };
+        drawRect(overlay, SDL_Color{250, 250, 250, 255}, COLOR_BUTTON_BORDER);
 
-    SDL_RenderCopy(renderer, t1, NULL, &r1);
-    SDL_RenderCopy(renderer, t2, NULL, &r2);
+        std::ostringstream msg;
+        if (lastWin) {
+            msg << "You've won! Congratulations!";
+        } else {
+            msg << "You've lost! The word was '" << secretWord << "'.";
+        }
+        std::ostringstream stats;
+        stats << "That's " << wonGames << " out of " << playedGames << "!";
 
-    SDL_FreeSurface(s1); SDL_FreeSurface(s2);
-    SDL_DestroyTexture(t1); SDL_DestroyTexture(t2);
+        drawText(msg.str(), overlay.x + 20, overlay.y + 30, COLOR_TEXT, fontMedium);
+        drawText(stats.str(), overlay.x + 20, overlay.y + 80, COLOR_TEXT, fontMedium);
+        drawText("Press Y for another round, N to close", overlay.x + 20, overlay.y + 140, COLOR_TEXT, fontMedium);
+    }
 
     SDL_RenderPresent(renderer);
-    SDL_Delay(2000);
 }
 
 bool Game::isGameOver() {
@@ -451,23 +483,37 @@ void Game::run() {
                     if(key == SDLK_y) { isRunning = false; }
                     else if(key == SDLK_n || key == SDLK_ESCAPE) { state = STATE_THEME_SELECT; }
                 }
-            } else if(state == STATE_PLAYING && !isGameOver()) {
+            } else if(state == STATE_PLAYING) {
                 if(event.type == SDL_KEYDOWN) {
-                    char guess = (char)event.key.keysym.sym;
-                    if(isalpha((unsigned char)guess)) {
-                        processInput(guess);
-                    }
-                } else if (event.type == SDL_MOUSEBUTTONDOWN) {
-                    int mx, my;
-                    SDL_GetMouseState(&mx, &my);
-                    // Hit-test keyboard buttons
-                    for (size_t i = 0; i < keyboardKeyRects.size(); ++i) {
-                        const SDL_Rect& r = keyboardKeyRects[i];
-                        if (mx >= r.x && mx <= r.x + r.w && my >= r.y && my <= r.y + r.h) {
-                            char c = keyboardKeyChars[i];
-                            processInput(c);
-                            break;
+                    SDL_Keycode key = event.key.keysym.sym;
+                    if (showingResult) {
+                        if (key == SDLK_y) {
+                            startNewGame();
+                        } else if (key == SDLK_n) {
+                            state = STATE_THEME_SELECT;
                         }
+                    } else {
+                        if (key >= SDLK_a && key <= SDLK_z) {
+                            char guess = static_cast<char>('A' + (key - SDLK_a));
+                            processInput(guess);
+                        } else if (key == SDLK_ESCAPE) {
+                            state = STATE_THEME_SELECT;
+                        }
+                    }
+                } else if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+                    int mx = event.button.x;
+                    int my = event.button.y;
+                    auto pointIn = [&](const SDL_Rect& r) {
+                        return mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h;
+                    };
+                    if (pointIn(buttonQuit)) {
+                        state = STATE_THEME_SELECT;
+                    } else if (!showingResult && pointIn(buttonNew)) {
+                        startNewGame();
+                    } else if (!showingResult && pointIn(buttonRestart)) {
+                        resetRound();
+                    } else if (!showingResult) {
+                        handleLetterClick(mx, my);
                     }
                 }
             }
@@ -481,25 +527,98 @@ void Game::run() {
             renderConfirmExit();
         } else {
             renderGame();
-            if(isGameOver()) {
-                renderResult();
-                state = STATE_THEME_SELECT;
-            }
         }
         SDL_Delay(16);
     }
 }
+void Game::initializeLetterButtons() {
+    const int lettersPerRow = 4;
+    const int buttonW = 60;
+    const int buttonH = 44;
+    const int gridLeft = 420;
+    const int gridTop = 80;
+    const int gridPadX = 18;
+    const int gridPadY = 12;
+
+    for (int i = 0; i < 26; ++i) {
+        int row = i / lettersPerRow;
+        int col = i % lettersPerRow;
+        SDL_Rect rect{
+            gridLeft + col * (buttonW + gridPadX),
+            gridTop + row * (buttonH + gridPadY),
+            buttonW,
+            buttonH
+        };
+        std::string label = std::string(" ") + static_cast<char>('A' + i) + " ";
+        letterButtons[static_cast<size_t>(i)] = { rect, label, false };
+    }
+
+    buttonNew = SDL_Rect{ 420, 480, 100, 44 };
+    buttonRestart = SDL_Rect{ 540, 480, 120, 44 };
+    buttonQuit = SDL_Rect{ 680, 480, 100, 44 };
+    resetLetterButtons();
+}
+
+void Game::resetLetterButtons() {
+    for (auto& button : letterButtons) {
+        button.disabled = false;
+    }
+}
+
+void Game::setLetterButtonState(char letter, bool disabled) {
+    char upper = static_cast<char>(std::toupper(static_cast<unsigned char>(letter)));
+    for (auto& button : letterButtons) {
+        if (button.label.size() >= 3 && button.label[1] == upper) {
+            button.disabled = disabled;
+            break;
+        }
+    }
+}
+
+bool Game::handleLetterClick(int x, int y) {
+    if (showingResult) return false;
+    for (auto& button : letterButtons) {
+        const SDL_Rect& r = button.rect;
+        if (!button.disabled &&
+            x >= r.x && x < r.x + r.w &&
+            y >= r.y && y < r.y + r.h) {
+            if (button.label.size() >= 3) {
+                processInput(button.label[1]);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void Game::resetRound() {
+    guessedLetters.clear();
+    wrongGuesses = 0;
+    guessedWord.resize(secretWord.length());
+    for (size_t i = 0; i < secretWord.size(); ++i) {
+        char c = secretWord[i];
+        if (std::isalpha(static_cast<unsigned char>(c))) {
+            guessedWord[i] = '_';
+        } else {
+            guessedWord[i] = c;
+        }
+    }
+    displayWord = buildDisplayedWord();
+    resetLetterButtons();
+    showingResult = false;
+}
 
 Game::~Game() {
-    if (font) {
-        TTF_CloseFont(font);
+    if (fontLarge) {
+        TTF_CloseFont(fontLarge);
+    }
+    if (fontMedium) {
+        TTF_CloseFont(fontMedium);
     }
     if (fontSmall) {
         TTF_CloseFont(fontSmall);
     }
     TTF_Quit();
-    for(auto texture : hangmanImages) SDL_DestroyTexture(texture);
-    SDL_DestroyTexture(backgroundTexture);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     SDL_Quit();

@@ -2,9 +2,10 @@
 1759399146 source:e:\demo\hangmanreal\hangman\main.cpp
 	"Game.h"
 
-1762422476 e:\demo\hangmanreal\hangman\game.h
+1762791281 e:\demo\hangmanreal\hangman\game.h
 	<SDL.h>
 	<vector>
+	<array>
 	<string>
 	<algorithm>
 	"fileReader.h"
