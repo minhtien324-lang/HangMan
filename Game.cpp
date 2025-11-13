@@ -64,7 +64,7 @@ Game::Game() : window(nullptr), renderer(nullptr), wrongGuesses(0), isRunning(tr
             }
         }
         if (!audioLoaded) {
-            std::cerr << "Warning: audio assets not found. Expected files like 'audio/" << "background_music.mp3" << "'." << std::endl;
+            std::cerr << "Warning: audio assets not found. Expected files like 'audio/" << "background.mp3" << "'." << std::endl;
         }
     } else {
         std::cerr << "Warning: failed to initialize audio. Sound will be disabled." << std::endl;
