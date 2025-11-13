@@ -8,6 +8,7 @@
 #include <algorithm>
 #include "fileReader.h"
 #include "themeManager.h"
+#include "audioManager.h"
 #include <SDL_ttf.h>
 class Game {
 public:
@@ -35,6 +36,8 @@ private:
     int themeMenuIndex; // 0-4: Themes, 5: Quit
     int difficultyMenuIndex; // 0: Easy, 1: Medium, 2: Hard, 3: Back
     ThemeManager themeManager;
+    AudioManager audioManager;
+    bool audioLoaded;
     std::vector<SDL_Rect> themeButtonRects;
     std::vector<SDL_Rect> difficultyButtonRects;
     struct LetterButton {
