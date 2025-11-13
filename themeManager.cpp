@@ -11,7 +11,7 @@ ThemeManager::ThemeManager() {
     themeNames[THEME_NATURE] = "Thien nhien";
     themeNames[THEME_TECHNOLOGY] = "Cong nghe";
     themeNames[THEME_SPORTS] = "The thao";
-    
+    themeNames[THEME_CARS] ="Xe";
     loadThemeWords();
 }
 
@@ -20,11 +20,12 @@ ThemeManager::~ThemeManager() {
 }
 
 void ThemeManager::loadThemeWords() {
-    loadWordsFromFile("animals.txt", THEME_ANIMALS);
-    loadWordsFromFile("food.txt", THEME_FOOD);
-    loadWordsFromFile("nature.txt", THEME_NATURE);
-    loadWordsFromFile("technology.txt", THEME_TECHNOLOGY);
-    loadWordsFromFile("sports.txt", THEME_SPORTS);
+    loadWordsFromFile("words/animals.txt", THEME_ANIMALS);
+    loadWordsFromFile("words/food.txt", THEME_FOOD);
+    loadWordsFromFile("words/nature.txt", THEME_NATURE);
+    loadWordsFromFile("words/technology.txt", THEME_TECHNOLOGY);
+    loadWordsFromFile("words/sports.txt", THEME_SPORTS);
+    loadWordsFromFile("words/cars.txt" , THEME_CARS);
 }
 
 void ThemeManager::loadWordsFromFile(const std::string& filename, Theme theme) {
@@ -33,7 +34,7 @@ void ThemeManager::loadWordsFromFile(const std::string& filename, Theme theme) {
         std::cerr << "Khong the mo file: " << filename << std::endl;
         return;
     }
-    
+
     std::string word;
     while (std::getline(file, word)) {
         if (!word.empty()) {
@@ -64,7 +65,7 @@ std::string ThemeManager::getRandomWordByTheme(Theme theme) const {
     if (words.empty()) {
         return "hangman"; // fallback
     }
-    
+
     srand((unsigned int)time(0));
     return words[rand() % words.size()];
 }
