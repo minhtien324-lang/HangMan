@@ -22,8 +22,9 @@ namespace {
 Game::Game() : window(nullptr), renderer(nullptr), wrongGuesses(0), isRunning(true),
     state(STATE_THEME_SELECT), difficulty(DIFF_EASY), selectedTheme(ThemeManager::THEME_ANIMALS),
     maxAttempts(MAX_ATTEMPTS), themeMenuIndex(0), difficultyMenuIndex(0),
-    showingResult(false), lastWin(false), playedGames(0), wonGames(0) {
-    SDL_Init(SDL_INIT_VIDEO);
+    showingResult(false), lastWin(false), playedGames(0),
+    audioLoaded(false), wonGames(0) {
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO);
     window = SDL_CreateWindow("Hangman", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 800, 600, 0);
     if (!window) {
         std::cerr << "SDL_CreateWindow failed: " << SDL_GetError() << std::endl;
@@ -47,6 +48,26 @@ Game::Game() : window(nullptr), renderer(nullptr), wrongGuesses(0), isRunning(tr
     if (!renderer) {
         std::cerr << "SDL_CreateRenderer failed: " << SDL_GetError() << std::endl;
         exit(1);
+    }
+
+    if (audioManager.initialize()) {
+        const std::vector<std::string> searchPaths{
+            "audio",
+            "assets/audio",
+            "assets/sounds",
+            "sounds"
+        };
+        for (const auto& path : searchPaths) {
+            if (audioManager.loadFromDirectory(path)) {
+                audioLoaded = true;
+                break;
+            }
+        }
+        if (!audioLoaded) {
+            std::cerr << "Warning: audio assets not found. Expected files like 'audio/" << "background_music.mp3" << "'." << std::endl;
+        }
+    } else {
+        std::cerr << "Warning: failed to initialize audio. Sound will be disabled." << std::endl;
     }
 
     initializeLetterButtons();
@@ -337,6 +358,9 @@ void Game::processInput(char guess) {
     }
 
     guessedLetters.push_back(upper);
+    if (audioLoaded) {
+        audioManager.playLetterClick();
+    }
     setLetterButtonState(upper, true);
 
     bool correct = false;
@@ -358,6 +382,13 @@ void Game::processInput(char guess) {
         playedGames += 1;
         if (lastWin) {
             wonGames += 1;
+        }
+        if (audioLoaded) {
+            if (lastWin) {
+                audioManager.playWinMusic();
+            } else {
+                audioManager.playLoseMusic();
+            }
         }
     }
 }
@@ -490,6 +521,9 @@ void Game::run() {
                         if (key == SDLK_y) {
                             startNewGame();
                         } else if (key == SDLK_n) {
+                            if (audioLoaded) {
+                                audioManager.stopBackgroundMusic();
+                            }
                             state = STATE_THEME_SELECT;
                         }
                     } else {
@@ -497,6 +531,9 @@ void Game::run() {
                             char guess = static_cast<char>('A' + (key - SDLK_a));
                             processInput(guess);
                         } else if (key == SDLK_ESCAPE) {
+                            if (audioLoaded) {
+                                audioManager.stopBackgroundMusic();
+                            }
                             state = STATE_THEME_SELECT;
                         }
                     }
@@ -507,6 +544,9 @@ void Game::run() {
                         return mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h;
                     };
                     if (pointIn(buttonQuit)) {
+                        if (audioLoaded) {
+                            audioManager.stopBackgroundMusic();
+                        }
                         state = STATE_THEME_SELECT;
                     } else if (!showingResult && pointIn(buttonNew)) {
                         startNewGame();
@@ -606,9 +646,15 @@ void Game::resetRound() {
     displayWord = buildDisplayedWord();
     resetLetterButtons();
     showingResult = false;
+    if (audioLoaded) {
+        audioManager.playBackgroundMusic();
+    }
 }
 
 Game::~Game() {
+    if (audioLoaded) {
+        audioManager.stopBackgroundMusic();
+    }
     if (fontLarge) {
         TTF_CloseFont(fontLarge);
     }
